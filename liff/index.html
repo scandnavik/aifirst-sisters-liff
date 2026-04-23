@@ -138,12 +138,6 @@
     let gemUrl = slug ? GEM_URLS[slug] : null;
     let gemName = slug ? GEM_NAMES[slug] : null;
 
-    // DEBUG: log 到 console + 也存到 window 方便 F12 查
-    console.log("[LIFF DEBUG] url.search =", window.location.search);
-    console.log("[LIFF DEBUG] resolveSlug() =", slug);
-    console.log("[LIFF DEBUG] gemUrl =", gemUrl);
-    window.__LIFF_DEBUG = { search: window.location.search, slug, gemUrl };
-
     const $status = document.getElementById("status");
     const $manual = document.getElementById("manual");
     const $manualBtn = document.getElementById("manual-btn");
@@ -170,11 +164,8 @@
 
     liff.init({ liffId: LIFF_ID })
       .then(() => {
-        console.log("[LIFF DEBUG] liff.init OK, isInClient =", liff.isInClient(), "search after init =", window.location.search);
-        // liff.init 跑完後，URL 通常會被 LIFF SDK normalize（liff.state 已展開）
-        // 重新解析一次以防萬一
+        // liff.init 跑完後，URL 通常會被 LIFF SDK normalize（liff.state 已展開），重新解析一次
         const s2 = resolveSlug();
-        console.log("[LIFF DEBUG] resolveSlug after init =", s2);
         if (s2) {
           slug = s2;
           gemUrl = GEM_URLS[s2] || gemUrl;
@@ -183,26 +174,21 @@
         }
 
         if (!slug || !gemUrl) {
-          console.log("[LIFF DEBUG] final slug/gemUrl empty, failing");
           fail("找不到對應的 Gem（網址參數錯誤）。請回 LINE 重新點選單。");
           return;
         }
 
         if (liff.isInClient()) {
-          // 手機 LINE in-app：跳外部瀏覽器（Safari / Chrome）
           liff.openWindow({ url: gemUrl, external: true });
           setTimeout(() => {
             try { liff.closeWindow(); } catch (e) {}
           }, 500);
         } else {
-          // 桌機 LINE 或直接貼網址：同分頁跳轉
           window.location.href = gemUrl;
         }
       })
       .catch((err) => {
-        console.error("[LIFF DEBUG] init failed:", err);
-        window.__LIFF_DEBUG.initError = String(err);
-        // LIFF init 失敗 → 如果 URL 直接帶 ?g=...，還是能跳
+        console.error("LIFF init failed:", err);
         if (slug && gemUrl) {
           window.location.href = gemUrl;
         } else {
