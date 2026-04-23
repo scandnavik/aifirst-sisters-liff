@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>世華姊妹 AI 助手</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #333;
+      text-align: center;
+    }
+    .container {
+      max-width: 360px;
+      padding: 32px 24px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      margin: 16px;
+    }
+    h1 {
+      font-size: 18px;
+      margin: 0 0 12px;
+      color: #1DB446;
+    }
+    .status {
+      font-size: 15px;
+      line-height: 1.6;
+      margin: 16px 0;
+      color: #666;
+    }
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #1DB446;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 8px 0;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .manual {
+      display: none;
+      margin-top: 16px;
+    }
+    .manual.show { display: block; }
+    .btn {
+      display: inline-block;
+      background: #1DB446;
+      color: #fff;
+      padding: 14px 28px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+    .hint {
+      font-size: 13px;
+      color: #999;
+      margin-top: 12px;
+    }
+    .error {
+      color: #d32f2f;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>正在打開 <span id="gem-name">AI 助手</span></h1>
+    <div class="spinner"></div>
+    <p class="status" id="status">請稍候，馬上為妳開啟外部瀏覽器...</p>
+
+    <div class="manual" id="manual">
+      <p class="status">如果沒有自動打開，請點下面的按鈕：</p>
+      <a class="btn" id="manual-btn" href="#" target="_blank" rel="noopener">手動打開</a>
+      <p class="hint">打開後用 Google 帳號登入即可使用</p>
+    </div>
+
+    <p class="error" id="error"></p>
+  </div>
+
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    // 建 Gem 後把 Gem ID 填進來（share URL 的 /gem/{id}?usp=sharing 那段 id）
+    const GEM_URLS = {
+      "deep-me":            "https://gemini.google.com/gem/1wtN7joDBjEMVYoZuwGq2GDjrkbKgZNpG?usp=sharing",
+      "menu-poster":        "https://gemini.google.com/gem/1P2nqOdwxgOBy2gYvcW-3k9ciJ1x9phkK?usp=sharing",
+      "product-styling":    "https://gemini.google.com/gem/1xsZm9Ad8gx7Enrt_qiYLSuF9f1zKp4I1?usp=sharing",
+      "short-video-script": "https://gemini.google.com/gem/1Qw-4NDkzf6ydXmZfCKoTcoONRnX_CZrw?usp=sharing",
+      "seasonal-marketing": "https://gemini.google.com/gem/1WfxE90Rej_jlz993YmlOwruQyFRfVb-R?usp=sharing",
+      "complaint-handling": "https://gemini.google.com/gem/1Di7dwPmwelzrFUPGFvTPjrptWPy-XKFW?usp=sharing",
+      "competitor-scan":    "https://gemini.google.com/gem/1_A1AnwvBCCMMKK07PRIlangGJrcUppeX?usp=sharing"
+    };
+
+    const GEM_NAMES = {
+      "deep-me":            "Deep Me 個人畫像",
+      "menu-poster":        "菜單海報變社群素材",
+      "product-styling":    "產品圖擺拍建議",
+      "short-video-script": "短影音拍攝腳本",
+      "seasonal-marketing": "今日節日行銷素材",
+      "complaint-handling": "客訴處理",
+      "competitor-scan":    "競品線上觀察"
+    };
+
+    // 阿岳建完 LIFF app 後把這裡換成實際 LIFF ID（格式 1234567890-aBcDeFgH）
+    const LIFF_ID = "2009877147-1pBXGlr2";
+
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get("g");
+    const gemUrl = GEM_URLS[slug];
+    const gemName = GEM_NAMES[slug];
+
+    const $status = document.getElementById("status");
+    const $manual = document.getElementById("manual");
+    const $manualBtn = document.getElementById("manual-btn");
+    const $gemName = document.getElementById("gem-name");
+    const $error = document.getElementById("error");
+
+    if (gemName) $gemName.textContent = gemName;
+
+    function showManual() {
+      $status.textContent = "如果下面按鈕沒有反應，請長按複製網址手動貼到瀏覽器。";
+      $manual.classList.add("show");
+      $manualBtn.href = gemUrl;
+    }
+
+    function fail(msg) {
+      $status.style.display = "none";
+      document.querySelector(".spinner").style.display = "none";
+      $error.textContent = msg;
+      showManual();
+    }
+
+    if (!slug || !gemUrl) {
+      fail("找不到對應的 Gem（網址參數錯誤）。請回 LINE 重新點選單。");
+    } else {
+      // 3 秒保險：不管 LIFF 成不成功，3 秒後顯示手動按鈕給使用者
+      setTimeout(showManual, 3000);
+
+      liff.init({ liffId: LIFF_ID })
+        .then(() => {
+          if (liff.isInClient()) {
+            // 手機 LINE in-app：跳外部瀏覽器（Safari / Chrome）
+            liff.openWindow({ url: gemUrl, external: true });
+            setTimeout(() => {
+              try { liff.closeWindow(); } catch (e) {}
+            }, 500);
+          } else {
+            // 桌機 LINE（系統瀏覽器已打開）或直接貼網址：同分頁跳轉
+            window.location.href = gemUrl;
+          }
+        })
+        .catch((err) => {
+          // LIFF init 失敗（LIFF_ID 還沒設 / 網路問題 / SDK 怪異）→ 直接跳
+          console.error("LIFF init failed:", err);
+          window.location.href = gemUrl;
+        });
+    }
+  </script>
+</body>
+</html>
