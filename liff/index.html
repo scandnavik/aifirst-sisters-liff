@@ -119,10 +119,24 @@
     // 阿岳建完 LIFF app 後把這裡換成實際 LIFF ID（格式 1234567890-aBcDeFgH）
     const LIFF_ID = "2009877147-1pBXGlr2";
 
-    const params = new URLSearchParams(window.location.search);
-    const slug = params.get("g");
-    const gemUrl = GEM_URLS[slug];
-    const gemName = GEM_NAMES[slug];
+    // 解析 query：直接讀 ?g=...，若沒有則讀 LIFF 包起來的 ?liff.state=?g=...
+    function resolveSlug() {
+      const p = new URLSearchParams(window.location.search);
+      let s = p.get("g");
+      if (s) return s;
+      const liffState = p.get("liff.state");
+      if (liffState) {
+        const cleaned = liffState.startsWith("?") ? liffState.slice(1) : liffState;
+        const inner = new URLSearchParams(cleaned);
+        s = inner.get("g");
+        if (s) return s;
+      }
+      return null;
+    }
+
+    let slug = resolveSlug();
+    let gemUrl = slug ? GEM_URLS[slug] : null;
+    let gemName = slug ? GEM_NAMES[slug] : null;
 
     const $status = document.getElementById("status");
     const $manual = document.getElementById("manual");
@@ -135,7 +149,7 @@
     function showManual() {
       $status.textContent = "如果下面按鈕沒有反應，請長按複製網址手動貼到瀏覽器。";
       $manual.classList.add("show");
-      $manualBtn.href = gemUrl;
+      if (gemUrl) $manualBtn.href = gemUrl;
     }
 
     function fail(msg) {
@@ -145,31 +159,46 @@
       showManual();
     }
 
-    if (!slug || !gemUrl) {
-      fail("找不到對應的 Gem（網址參數錯誤）。請回 LINE 重新點選單。");
-    } else {
-      // 3 秒保險：不管 LIFF 成不成功，3 秒後顯示手動按鈕給使用者
-      setTimeout(showManual, 3000);
+    // 3 秒保險：不管 LIFF 成不成功，3 秒後顯示手動按鈕
+    setTimeout(showManual, 3000);
 
-      liff.init({ liffId: LIFF_ID })
-        .then(() => {
-          if (liff.isInClient()) {
-            // 手機 LINE in-app：跳外部瀏覽器（Safari / Chrome）
-            liff.openWindow({ url: gemUrl, external: true });
-            setTimeout(() => {
-              try { liff.closeWindow(); } catch (e) {}
-            }, 500);
-          } else {
-            // 桌機 LINE（系統瀏覽器已打開）或直接貼網址：同分頁跳轉
-            window.location.href = gemUrl;
-          }
-        })
-        .catch((err) => {
-          // LIFF init 失敗（LIFF_ID 還沒設 / 網路問題 / SDK 怪異）→ 直接跳
-          console.error("LIFF init failed:", err);
+    liff.init({ liffId: LIFF_ID })
+      .then(() => {
+        // liff.init 跑完後，URL 通常會被 LIFF SDK normalize（liff.state 已展開）
+        // 重新解析一次以防萬一
+        const s2 = resolveSlug();
+        if (s2) {
+          slug = s2;
+          gemUrl = GEM_URLS[s2] || gemUrl;
+          gemName = GEM_NAMES[s2] || gemName;
+          if (gemName) $gemName.textContent = gemName;
+        }
+
+        if (!slug || !gemUrl) {
+          fail("找不到對應的 Gem（網址參數錯誤）。請回 LINE 重新點選單。");
+          return;
+        }
+
+        if (liff.isInClient()) {
+          // 手機 LINE in-app：跳外部瀏覽器（Safari / Chrome）
+          liff.openWindow({ url: gemUrl, external: true });
+          setTimeout(() => {
+            try { liff.closeWindow(); } catch (e) {}
+          }, 500);
+        } else {
+          // 桌機 LINE 或直接貼網址：同分頁跳轉
           window.location.href = gemUrl;
-        });
-    }
+        }
+      })
+      .catch((err) => {
+        console.error("LIFF init failed:", err);
+        // LIFF init 失敗 → 如果 URL 直接帶 ?g=...，還是能跳
+        if (slug && gemUrl) {
+          window.location.href = gemUrl;
+        } else {
+          fail("LIFF 初始化失敗，且網址參數錯誤。請回 LINE 重新點選單。");
+        }
+      });
   </script>
 </body>
 </html>
